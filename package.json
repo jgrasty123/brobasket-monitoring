@@ -1,0 +1,14 @@
+{
+  "name": "brobasket-monitoring",
+  "private": true,
+  "description": "BroBasket synthetic monitoring as code (Checkly + Playwright)",
+  "scripts": {
+    "test": "npx checkly test",
+    "deploy": "npx checkly deploy"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0",
+    "checkly": "^6.0.0",
+    "typescript": "^5.5.0"
+  }
+}
