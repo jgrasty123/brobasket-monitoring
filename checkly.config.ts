@@ -38,19 +38,13 @@ export default defineConfig({
         logicalId: 'cart-journey',
         name: 'BroBasket — Cart Journey (Chromium + WebKit)',
         pwTags: ['@cart'],
-        frequency: Frequency.EVERY_10M,
+        frequency: Frequency.EVERY_1H, // Starter-plan budget: ~1,460 runs/mo across 2 browsers
       },
       {
         logicalId: 'console-sentinel',
         name: 'BroBasket — Console Error Sentinel (Chromium + WebKit)',
         pwTags: ['@sentinel'],
-        frequency: Frequency.EVERY_30M,
-      },
-      {
-        logicalId: 'homepage-smoke',
-        name: 'BroBasket — Homepage Smoke',
-        pwTags: ['@smoke'],
-        frequency: Frequency.EVERY_1H,
+        frequency: Frequency.EVERY_2H, // Starter-plan budget: ~730 runs/mo across 2 browsers
       },
     ],
   },
