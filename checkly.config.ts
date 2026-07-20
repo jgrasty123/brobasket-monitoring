@@ -28,8 +28,12 @@ export default defineConfig({
       maxRetries: 1,
       sameRegion: false,
     }),
-    playwrightConfigPath: './playwright.config.ts',
-    playwrightChecks: [
+    // Browser/Playwright checks require a paid plan (Hobby includes 0).
+    // Set CHECKLY_ENABLE_BROWSER_SUITE=1 and redeploy after upgrading.
+    ...(process.env.CHECKLY_ENABLE_BROWSER_SUITE === '1'
+      ? { playwrightConfigPath: './playwright.config.ts' }
+      : {}),
+    playwrightChecks: process.env.CHECKLY_ENABLE_BROWSER_SUITE !== '1' ? [] : [
       {
         logicalId: 'cart-journey',
         name: 'BroBasket — Cart Journey (Chromium + WebKit)',
