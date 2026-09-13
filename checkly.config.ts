@@ -8,6 +8,8 @@ import { Frequency, RetryStrategyBuilder } from 'checkly/constructs'
  * Slices (by Playwright tag):
  *  @cart      — full PDP→cart→checkout journey incl. regression assertions
  *               (orphan adult-signature fee, date picker resolves)
+ *  @shipping  — checkout address → priced shipping rate (PA, NY); creates an
+ *               abandoned checkout per run, so kept to every 6h
  *  @sentinel  — console error sentinel on homepage/collection/PDP
  *  @smoke     — cheap homepage smoke
  * Each slice runs on desktop-chromium AND mobile-safari (WebKit).
@@ -39,6 +41,12 @@ export default defineConfig({
         name: 'BroBasket — Cart Journey (Chromium + WebKit)',
         pwTags: ['@cart'],
         frequency: Frequency.EVERY_1H, // Starter-plan budget: ~1,460 runs/mo across 2 browsers
+      },
+      {
+        logicalId: 'checkout-shipping',
+        name: 'BroBasket — Checkout Shipping Rates PA/NY (Chromium + WebKit)',
+        pwTags: ['@shipping'],
+        frequency: Frequency.EVERY_6H, // ~240 runs/mo across 2 browsers; each run leaves one abandoned checkout
       },
       {
         logicalId: 'console-sentinel',
