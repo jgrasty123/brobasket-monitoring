@@ -1,4 +1,5 @@
-import { test, expect, Page } from '@playwright/test'
+import { test, expect } from '@playwright/test'
+import { openFirstAvailableProduct, addToCartAndOpenDrawer } from '../helpers/journey'
 
 /**
  * BroBasket cart journey — the money path, plus permanent tripwires for
@@ -8,55 +9,23 @@ import { test, expect, Page } from '@playwright/test'
  *   3. Removing the parent product removes its linked
  *      Adult Signature fee — no orphan fees                   (May 26 fix)
  *   4. Checkout handoff reaches Shopify checkout
+ * The shipping-rate step lives in checkout-shipping.spec.ts (@shipping) at a
+ * lower cadence — it has to enter an email, which creates an abandoned
+ * checkout record on every run.
  * Runs on desktop-chromium AND mobile-safari (@cart tag).
  */
-
-const COLLECTION = '/collections/gift-baskets-for-men'
-
-async function openFirstAvailableProduct(page: Page) {
-  await page.goto(COLLECTION, { waitUntil: 'domcontentloaded' })
-  // Skip sold-out tiles (badge shipped May 2026)
-  const tiles = page.locator('.product-card, [class*="product-card"]')
-  await expect(tiles.first()).toBeVisible()
-  const count = Math.min(await tiles.count(), 8)
-  for (let i = 0; i < count; i++) {
-    const tile = tiles.nth(i)
-    if ((await tile.getByText(/sold out/i).count()) === 0) {
-      await tile.locator('a[href*="/products/"]').first().click()
-      await page.waitForURL(/\/products\//)
-      return
-    }
-  }
-  throw new Error('No in-stock product tile found on first collection page')
-}
-
-async function addToCartAndOpenDrawer(page: Page) {
-  const atc = page
-    .locator('form[is="product-form"] button[type="submit"], button[name="add"]')
-    .first()
-  await expect(atc, 'ATC button visible on PDP').toBeVisible()
-  await expect(atc, 'ATC button enabled').toBeEnabled()
-  await atc.click()
-  // bb-product-addons flow redirects to /cart; native flow opens the drawer.
-  await Promise.race([
-    page.waitForURL(/\/cart/, { timeout: 20_000 }).catch(() => null),
-    page
-      .locator('#cart-drawer, cart-drawer')
-      .waitFor({ state: 'visible', timeout: 20_000 })
-      .catch(() => null),
-  ])
-  if (!/\/cart/.test(page.url())) {
-    // Ensure we evaluate cart state on the cart page for a single code path
-    await page.goto('/cart', { waitUntil: 'domcontentloaded' })
-  }
-}
 
 test('@cart PDP → cart → checkout with regression tripwires', async ({ page }) => {
   await openFirstAvailableProduct(page)
   await addToCartAndOpenDrawer(page)
 
   // --- 1. Line item actually visible (the empty-cart bug class) -------------
-  const lineItems = page.locator('.line-item, line-item, [class*="line-item"]')
+  // /cart renders line items as table rows; the drawer's container div also
+  // matches [class*="line-item"] while hidden, so require a visible, priced row.
+  const lineItems = page
+    .locator('table tbody tr, .line-item, line-item, [class*="line-item"]')
+    .filter({ hasText: /\$\s?\d/ })
+    .filter({ visible: true })
   await expect(lineItems.first(), 'cart shows at least one line item').toBeVisible()
 
   // --- 2. Date picker must resolve, not hang -------------------------------
@@ -73,13 +42,19 @@ test('@cart PDP → cart → checkout with regression tripwires', async ({ page 
   if (hasSignature) {
     // Remove the parent (first non-signature line item)
     const parentRemove = page
-      .locator('.line-item, line-item')
-      .filter({ hasNotText: /adult signature/i })
+      .locator('table tbody tr, .line-item, line-item')
+      .filter({ hasText: /\$\s?\d/ })
+      .filter({ hasNotText: /adult signature|special card|greeting card/i })
+      .filter({ visible: true })
       .first()
-      .locator('a[href*="quantity=0"], button[aria-label*="emove"], a[aria-label*="emove"]')
+      .locator('a[href*="quantity=0"], a[aria-label*="emove" i], button[aria-label*="emove" i], a:has-text("Remove")')
       .first()
-    await expect(parentRemove, 'remove control on parent line item').toBeVisible()
-    await parentRemove.click()
+    // The Remove link is visually hidden on desktop (quantity spinner is the
+    // visible control), so follow its href instead of clicking it.
+    await expect(parentRemove, 'remove control on parent line item').toHaveCount(1)
+    const removeHref = await parentRemove.getAttribute('href')
+    if (removeHref) await page.goto(removeHref, { waitUntil: 'domcontentloaded' })
+    else await parentRemove.click()
     // Fee must disappear with its parent (May 26 orphan-fee fix)
     await expect(
       page.getByText(/adult signature/i),
@@ -97,7 +72,6 @@ test('@cart PDP → cart → checkout with regression tripwires', async ({ page 
   await expect(checkoutBtn, 'checkout CTA visible').toBeVisible()
   await checkoutBtn.click()
   await page.waitForURL(/checkout|\/checkouts\//, { timeout: 30_000 })
-  // Never complete a purchase — reaching Shopify checkout is the pass condition.
   await expect(page.locator('body')).toContainText(/contact|delivery|shipping|express/i, {
     timeout: 20_000,
   })
